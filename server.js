@@ -11,13 +11,21 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(express.json());
 app.use(cors({
-    
-  origin: [
-   "http://localhost:5173",
-    "http://localhost:5174",
-    process.env.FRONTEND_URL,
-   ], // your Vercel URL
-  methods: ["POST"],
+  origin: function (origin, callback) {
+    // Allow any vercel.app subdomain + localhost
+    const allowed = [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      process.env.FRONTEND_URL,
+    ];
+
+    if (!origin || allowed.includes(origin) || origin.endsWith(".vercel.app")) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST"],
 }));
 
 // Nodemailer transporter using Gmail
