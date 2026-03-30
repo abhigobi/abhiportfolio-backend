@@ -1,24 +1,23 @@
 import express from "express";
-import nodemailer from "nodemailer";
 import cors from "cors";
 import dotenv from "dotenv";
+import { Resend } from "resend";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Middleware
 app.use(express.json());
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow any vercel.app subdomain + localhost
     const allowed = [
       "http://localhost:5173",
       "http://localhost:5174",
       process.env.FRONTEND_URL,
     ];
-
     if (!origin || allowed.includes(origin) || origin.endsWith(".vercel.app")) {
       callback(null, true);
     } else {
@@ -28,51 +27,41 @@ app.use(cors({
   methods: ["GET", "POST"],
 }));
 
-// Nodemailer transporter using Gmail
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,   // your Gmail address
-    pass: process.env.EMAIL_PASS,   // Gmail app password (not your real password)
-  },
+// Health check
+app.get("/", (req, res) => {
+  res.send("Backend is running.");
 });
 
 // Contact route
 app.post("/send", async (req, res) => {
   const { name, email, message } = req.body;
 
-  // Basic validation
   if (!name || !email || !message) {
     return res.status(400).json({ error: "All fields are required." });
   }
 
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: process.env.EMAIL_USER,       // sends to yourself
-    replyTo: email,                   // so you can reply directly to the sender
-    subject: `Portfolio Contact — ${name}`,
-    html: `
-      <h2>New message from your portfolio</h2>
-      <p><strong>Name:</strong> ${name}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Message:</strong></p>
-      <p>${message}</p>
-    `,
-  };
-
   try {
-    await transporter.sendMail(mailOptions);
-    console.log("✅ Email sent successfully"); 
+    await resend.emails.send({
+      from: "Portfolio Contact <onboarding@resend.dev>", // free default sender
+      to: process.env.EMAIL_TO,                          // your Gmail address
+      replyTo: email,
+      subject: `Portfolio Contact — ${name}`,
+      html: `
+        <h2>New message from your portfolio</h2>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Message:</strong></p>
+        <p>${message}</p>
+      `,
+    });
+
+    console.log("✅ Email sent successfully");
     res.status(200).json({ success: "Message sent successfully!" });
+
   } catch (error) {
-   console.error("❌ Email error:", error.message);
+    console.error("❌ Email error:", error.message);
     res.status(500).json({ error: "Failed to send message. Try again." });
   }
-});
-
-// Health check route (Render needs this)
-app.get("/", (req, res) => {
-  res.send("Backend is running.");
 });
 
 app.listen(PORT, () => {
